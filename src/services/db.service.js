@@ -53,16 +53,29 @@ export const getUserByEmail = async (email) => {
 
 export const getUserById = async (userId) => {
   const result = await query(
-    'SELECT u.*, r.name as role_name FROM users u LEFT JOIN roles r ON u.role_id = r.role_id WHERE u.user_id = $1 AND u.is_deleted = false',
+    `SELECT u.user_id, u.username, u.email, u.name, u.role_id, r.name as role_name,
+            COALESCE(JSON_AGG(JSON_BUILD_OBJECT(
+              'event_id', e.event_id, 
+              'event_name', e.event_name,
+              'description', e.description,
+              'start_date_time', e.start_date_time,
+              'address', e.address
+            )) FILTER (WHERE e.event_id IS NOT NULL), '[]') as assigned_events
+     FROM users u
+     LEFT JOIN roles r ON u.role_id = r.role_id
+     LEFT JOIN user_events ue ON u.user_id = ue.user_id AND ue.is_deleted = false
+     LEFT JOIN events e ON ue.event_id = e.event_id AND e.is_deleted = false
+     WHERE u.user_id = $1 AND u.is_deleted = false
+     GROUP BY u.user_id, u.username, u.email, u.name, u.role_id, r.name`,
     [userId]
   );
   return result.rows[0] || null;
 };
 
-export const createUser = async (name, email, password, roleId) => {
+export const createUser = async (name, email, username, password, roleId) => {
   const result = await query(
-    'INSERT INTO users (name, email, password, role_id, is_deleted, created_at) VALUES ($1, $2, $3, $4, false, NOW()) RETURNING *',
-    [name, email, password, roleId]
+    'INSERT INTO users (name, email, username, password, role_id, is_deleted, created_at) VALUES ($1, $2, $3, $4, $5, false, NOW()) RETURNING *',
+    [name, email, username, password, roleId]
   );
   return result.rows[0];
 };
@@ -78,7 +91,13 @@ export const getRoleByName = async (roleName) => {
 export const listUsers = async () => {
   const result = await query(
     `SELECT u.user_id, u.username, u.email, u.name, r.name as role_name,
-            COALESCE(JSON_AGG(JSON_BUILD_OBJECT('event_id', e.event_id, 'event_name', e.event_name)) FILTER (WHERE e.event_id IS NOT NULL), '[]') as assigned_events
+            COALESCE(JSON_AGG(JSON_BUILD_OBJECT(
+              'event_id', e.event_id, 
+              'event_name', e.event_name,
+              'description', e.description,
+              'start_date_time', e.start_date_time,
+              'address', e.address
+            )) FILTER (WHERE e.event_id IS NOT NULL), '[]') as assigned_events
      FROM users u
      LEFT JOIN roles r ON u.role_id = r.role_id
      LEFT JOIN user_events ue ON u.user_id = ue.user_id AND ue.is_deleted = false
@@ -150,13 +169,30 @@ export const createEvent = async (eventData) => {
     address,
     eventFor,
     imageId,
+    capacity,
+    entryFee,
+    category,
+    additionalInfo,
+    organizerName,
+    organizerEmail,
+    organizerPhone,
+    organizerRole,
   } = eventData;
 
   const result = await query(
-    `INSERT INTO events (event_name, description, start_date_time, end_date_time, address, event_for, image_id, is_deleted) 
-     VALUES ($1, $2, $3, $4, $5, $6, $7, false) 
+    `INSERT INTO events (
+      event_name, description, start_date_time, end_date_time, address, 
+      event_for, image_id, capacity, entry_fee, category, 
+      additional_info, organizer_name, organizer_email, organizer_phone, organizer_role,
+      is_deleted
+    ) 
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, false) 
      RETURNING *`,
-    [eventName, description, startDateTime, endDateTime, address, eventFor, imageId]
+    [
+      eventName, description, startDateTime, endDateTime, address, 
+      eventFor, imageId, capacity, entryFee, category, 
+      additionalInfo, organizerName, organizerEmail, organizerPhone, organizerRole
+    ]
   );
   return result.rows[0];
 };
@@ -170,14 +206,29 @@ export const updateEvent = async (eventId, eventData) => {
     address,
     eventFor,
     imageId,
+    capacity,
+    entryFee,
+    category,
+    additionalInfo,
+    organizerName,
+    organizerEmail,
+    organizerPhone,
+    organizerRole,
   } = eventData;
 
   const result = await query(
     `UPDATE events 
-     SET event_name = $1, description = $2, start_date_time = $3, end_date_time = $4, address = $5, event_for = $6, image_id = $7 
-     WHERE event_id = $8 AND is_deleted = false 
+     SET event_name = $1, description = $2, start_date_time = $3, end_date_time = $4, address = $5, 
+         event_for = $6, image_id = $7, capacity = $8, entry_fee = $9, category = $10, 
+         additional_info = $11, organizer_name = $12, organizer_email = $13, organizer_phone = $14, organizer_role = $15 
+     WHERE event_id = $16 AND is_deleted = false 
      RETURNING *`,
-    [eventName, description, startDateTime, endDateTime, address, eventFor, imageId, eventId]
+    [
+      eventName, description, startDateTime, endDateTime, address, 
+      eventFor, imageId, capacity, entryFee, category, 
+      additionalInfo, organizerName, organizerEmail, organizerPhone, organizerRole,
+      eventId
+    ]
   );
   return result.rows[0] || null;
 };

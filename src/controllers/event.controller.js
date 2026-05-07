@@ -58,6 +58,11 @@ export const createNewEvent = async (req, res, next) => {
       address,
       event_for,
       image_id,
+      capacity,
+      entry_fee,
+      category,
+      additional_info,
+      organizer_details,
     } = req.body;
 
     // Validation
@@ -101,6 +106,14 @@ export const createNewEvent = async (req, res, next) => {
       address,
       eventFor: event_for,
       imageId: image_id || null,
+      capacity: capacity || null,
+      entryFee: entry_fee || 0,
+      category: category || 'EVENT',
+      additionalInfo: additional_info || '',
+      organizerName: organizer_details?.name || '',
+      organizerEmail: organizer_details?.email || '',
+      organizerPhone: organizer_details?.phone || '',
+      organizerRole: organizer_details?.role || '',
     };
 
     const newEvent = await createEvent(eventData);
@@ -122,6 +135,11 @@ export const editEvent = async (req, res, next) => {
       address,
       event_for,
       image_id,
+      capacity,
+      entry_fee,
+      category,
+      additional_info,
+      organizer_details,
     } = req.body;
 
     if (!eventId) {
@@ -163,6 +181,14 @@ export const editEvent = async (req, res, next) => {
       address: address || event.address,
       eventFor: event_for || event.event_for,
       imageId: image_id !== undefined ? image_id : event.image_id,
+      capacity: capacity !== undefined ? capacity : event.capacity,
+      entryFee: entry_fee !== undefined ? entry_fee : event.entry_fee,
+      category: category || event.category,
+      additionalInfo: additional_info || event.additional_info,
+      organizerName: organizer_details?.name || event.organizer_name,
+      organizerEmail: organizer_details?.email || event.organizer_email,
+      organizerPhone: organizer_details?.phone || event.organizer_phone,
+      organizerRole: organizer_details?.role || event.organizer_role,
     };
 
     const updatedEvent = await updateEvent(eventId, eventData);

@@ -17,7 +17,7 @@ import { validateEmail, validatePassword } from '../utils/validators.js';
 
 export const register = async (req, res, next) => {
   try {
-    const { name, email, password, role = 'user' } = req.body;
+    const { name, email, username, password, role = 'user' } = req.body;
 
     // Validation
     if (!name || !email || !password) {
@@ -48,7 +48,7 @@ export const register = async (req, res, next) => {
     const hashedPassword = await hashPassword(password);
 
     // Create user
-    const newUser = await createUser(name, email, hashedPassword, roleData.role_id);
+    const newUser = await createUser(name, email, username, hashedPassword, roleData.role_id);
 
     // Generate token
     const token = generateToken({
