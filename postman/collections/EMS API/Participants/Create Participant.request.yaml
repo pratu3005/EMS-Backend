@@ -1,0 +1,16 @@
+$kind: http-request
+name: Create Participant
+method: POST
+url: '{{baseUrl}}/participants'
+order: 2000
+headers:
+  - key: Content-Type
+    value: application/json
+body:
+  type: json
+  content: |-
+    {
+      "name": "Jane Smith",
+      "email": "jane@example.com",
+      "phone": "+1234567890"
+    }

@@ -22,7 +22,11 @@ export const getDashboardStats = async (req, res, next) => {
     const totalRegistrations = parseInt(registrationsResult.rows[0].total, 10);
 
     // Total scans
-    const scansResult = await query('SELECT COUNT(*) as total FROM scan_logs');
+    const scansResult = await query(
+      `SELECT COUNT(*) as total FROM scan_logs sl 
+       JOIN event_registrations er ON sl.registration_id = er.registration_id 
+       WHERE er.is_deleted = false`
+    );
     const totalScans = parseInt(scansResult.rows[0].total, 10);
 
     // Registrations by status

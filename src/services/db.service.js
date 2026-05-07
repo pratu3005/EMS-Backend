@@ -75,12 +75,49 @@ export const getRoleByName = async (roleName) => {
   return result.rows[0] || null;
 };
 
+export const listUsers = async () => {
+  const result = await query(
+    `SELECT u.user_id, u.username, u.email, u.name, r.name as role_name,
+            COALESCE(JSON_AGG(JSON_BUILD_OBJECT('event_id', e.event_id, 'event_name', e.event_name)) FILTER (WHERE e.event_id IS NOT NULL), '[]') as assigned_events
+     FROM users u
+     LEFT JOIN roles r ON u.role_id = r.role_id
+     LEFT JOIN user_events ue ON u.user_id = ue.user_id AND ue.is_deleted = false
+     LEFT JOIN events e ON ue.event_id = e.event_id AND e.is_deleted = false
+     WHERE u.is_deleted = false
+     GROUP BY u.user_id, u.username, u.email, u.name, r.name
+     ORDER BY u.created_at DESC`
+  );
+  return result.rows;
+};
+
+export const assignEventsToUser = async (userId, eventIds) => {
+  // First, soft delete old assignments
+  await query('UPDATE user_events SET is_deleted = true WHERE user_id = $1', [userId]);
+  
+  if (eventIds && eventIds.length > 0) {
+    for (const eventId of eventIds) {
+      await query(
+        `INSERT INTO user_events (user_id, event_id) VALUES ($1, $2) 
+         ON CONFLICT (user_id, event_id) DO UPDATE SET is_deleted = false`,
+        [userId, eventId]
+      );
+    }
+  }
+};
+
+export const deleteUser = async (userId) => {
+  await query('UPDATE users SET is_deleted = true WHERE user_id = $1', [userId]);
+};
+
 // Event queries
 export const getAllEvents = async (limit = 10, offset = 0) => {
   const result = await query(
-    `SELECT e.*, i.url as image_url FROM events e 
+    `SELECT e.*, i.url as image_url, COUNT(er.registration_id) as total_registrations 
+     FROM events e 
      LEFT JOIN images i ON e.image_id = i.image_id 
+     LEFT JOIN event_registrations er ON e.event_id = er.event_id AND er.is_deleted = false
      WHERE e.is_deleted = false 
+     GROUP BY e.event_id, i.url
      ORDER BY e.created_at DESC LIMIT $1 OFFSET $2`,
     [limit, offset]
   );
@@ -221,7 +258,7 @@ export const getEventRegistrations = async (eventId, limit = 10, offset = 0) => 
      JOIN participants p ON er.participant_id = p.participant_id 
      LEFT JOIN status_master rs ON er.registration_status_id = rs.status_id AND rs.type = 'registration'
      LEFT JOIN status_master as_status ON er.attendance_status_id = as_status.status_id AND as_status.type = 'attendance'
-     WHERE er.event_id = $1 AND er.is_deleted = false 
+     WHERE er.event_id = $1 AND er.is_deleted = false AND p.is_deleted = false 
      ORDER BY er.created_at DESC LIMIT $2 OFFSET $3`,
     [eventId, limit, offset]
   );
@@ -234,6 +271,39 @@ export const getEventRegistrationCount = async (eventId) => {
     [eventId]
   );
   return parseInt(result.rows[0].total, 10);
+};
+
+export const getAllRegistrations = async (limit = 10, offset = 0) => {
+  const result = await query(
+    `SELECT er.*, p.name as participant_name, p.email as participant_email, p.phone as participant_phone, 
+            e.event_name, sm.name as status_name 
+     FROM event_registrations er 
+     JOIN participants p ON er.participant_id = p.participant_id 
+     JOIN events e ON er.event_id = e.event_id 
+     JOIN status_master sm ON er.registration_status_id = sm.status_id 
+     WHERE er.is_deleted = false AND p.is_deleted = false AND e.is_deleted = false 
+     ORDER BY er.created_at DESC LIMIT $1 OFFSET $2`,
+    [limit, offset]
+  );
+  return result.rows;
+};
+
+export const getAllRegistrationCount = async () => {
+  const result = await query(
+    `SELECT COUNT(*) as total FROM event_registrations er 
+     JOIN participants p ON er.participant_id = p.participant_id 
+     JOIN events e ON er.event_id = e.event_id 
+     WHERE er.is_deleted = false AND p.is_deleted = false AND e.is_deleted = false`
+  );
+  return parseInt(result.rows[0].total, 10);
+};
+
+export const updateRegistrationStatus = async (registrationId, statusId) => {
+  const result = await query(
+    'UPDATE event_registrations SET registration_status_id = $1, updated_at = NOW() WHERE registration_id = $2 RETURNING *',
+    [statusId, registrationId]
+  );
+  return result.rows[0];
 };
 
 // Status queries
@@ -354,7 +424,7 @@ export const getScanLogsByEventId = async (eventId, limit = 10, offset = 0) => {
      FROM scan_logs sl 
      JOIN event_registrations er ON sl.registration_id = er.registration_id 
      JOIN participants p ON er.participant_id = p.participant_id 
-     WHERE sl.event_id = $1 
+     WHERE sl.event_id = $1 AND er.is_deleted = false AND p.is_deleted = false 
      ORDER BY sl.created_at DESC LIMIT $2 OFFSET $3`,
     [eventId, limit, offset]
   );

@@ -1,0 +1,10 @@
+$kind: http-request
+name: Get Scan Logs
+method: GET
+url: '{{baseUrl}}/scans/event/{{eventId}}'
+order: 2000
+queryParams:
+  - key: page
+    value: '1'
+  - key: pageSize
+    value: '10'

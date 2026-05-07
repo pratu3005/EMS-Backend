@@ -1,10 +1,10 @@
 import express from 'express';
-import { scanQR } from '../controllers/scan.controller.js';
+import { getPass } from '../controllers/pass.controller.js';
 import { authenticate } from '../middleware/auth.middleware.js';
 
 const router = express.Router();
 
-// Scan QR code (verifier route)
-router.post('/', authenticate, scanQR);
+// Retrieve pass details
+router.get('/:registration_id', getPass);
 
 export default router;

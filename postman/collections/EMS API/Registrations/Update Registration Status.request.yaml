@@ -1,0 +1,19 @@
+$kind: http-request
+name: Update Registration Status
+method: PATCH
+url: '{{baseUrl}}/registrations/{{registrationId}}/status'
+order: 5000
+auth:
+  type: bearer
+  credentials:
+    - key: token
+      value: '{{authToken}}'
+headers:
+  - key: Content-Type
+    value: application/json
+body:
+  type: json
+  content: |-
+    {
+      "status": "approved"
+    }

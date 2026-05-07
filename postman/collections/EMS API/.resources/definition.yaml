@@ -1,0 +1,13 @@
+$kind: collection
+name: EMS API
+variables:
+  - key: baseUrl
+    value: 'http://localhost:5000/api'
+  - key: authToken
+    value: ''
+  - key: eventId
+    value: '1'
+  - key: participantId
+    value: '1'
+  - key: registrationId
+    value: '1'

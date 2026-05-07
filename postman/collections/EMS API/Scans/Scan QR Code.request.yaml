@@ -1,0 +1,20 @@
+$kind: http-request
+name: Scan QR Code
+method: POST
+url: '{{baseUrl}}/scans/qr'
+order: 1000
+auth:
+  type: bearer
+  credentials:
+    - key: token
+      value: '{{authToken}}'
+headers:
+  - key: Content-Type
+    value: application/json
+body:
+  type: json
+  content: |-
+    {
+      "qr_code": "data:image/png;base64,...",
+      "event_id": 1
+    }

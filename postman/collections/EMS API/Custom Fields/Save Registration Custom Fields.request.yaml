@@ -1,0 +1,19 @@
+$kind: http-request
+name: Save Registration Custom Fields
+method: POST
+url: '{{baseUrl}}/custom-fields/registration/{{registrationId}}'
+order: 4000
+headers:
+  - key: Content-Type
+    value: application/json
+body:
+  type: json
+  content: |-
+    {
+      "customFields": [
+        {
+          "custom_id": 1,
+          "value": "L"
+        }
+      ]
+    }

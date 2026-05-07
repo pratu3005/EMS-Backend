@@ -10,7 +10,7 @@ const app = express();
 // Middleware
 app.use(helmet());
 app.use(cors({
-  origin: config.CORS_ORIGIN,
+  origin: true,
   credentials: true,
 }));
 app.use(express.json({ limit: '50mb' }));
@@ -34,23 +34,6 @@ app.get('/', (req, res) => {
       api: '/api',
       events: '/api/events',
       auth: '/api/auth',
-    },
-  });
-});
-
-app.get('/api', (req, res) => {
-  res.json({
-    message: '✅ API is working correctly',
-    version: '1.0.0',
-    endpoints: {
-      health: '/api/health',
-      auth: '/api/auth',
-      events: '/api/events',
-      participants: '/api/participants',
-      registrations: '/api/registrations',
-      customFields: '/api/custom-fields',
-      scans: '/api/scans',
-      dashboard: '/api/dashboard',
     },
   });
 });

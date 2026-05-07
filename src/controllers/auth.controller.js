@@ -8,6 +8,9 @@ import {
   createUser,
   getRoleByName,
   getUserById,
+  listUsers,
+  assignEventsToUser,
+  deleteUser,
 } from '../services/db.service.js';
 import { sendSuccess, sendError } from '../utils/response.js';
 import { validateEmail, validatePassword } from '../utils/validators.js';
@@ -113,6 +116,7 @@ export const login = async (req, res, next) => {
         name: userWithRole.name,
         email: userWithRole.email,
         role: userWithRole.role_name,
+        assigned_events: userWithRole.assigned_events || [],
       },
       token,
     });
@@ -133,8 +137,40 @@ export const getProfile = async (req, res, next) => {
       name: user.name,
       email: user.email,
       role: user.role_name,
+      assigned_events: user.assigned_events || [],
       created_at: user.created_at,
     });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const listAllUsers = async (req, res, next) => {
+  try {
+    const users = await listUsers();
+    return sendSuccess(res, users);
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const updateVerifierEvents = async (req, res, next) => {
+  try {
+    const { userId } = req.params;
+    const { eventIds } = req.body;
+    
+    await assignEventsToUser(userId, eventIds);
+    return sendSuccess(res, null, 'User events updated successfully');
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const removeUser = async (req, res, next) => {
+  try {
+    const { userId } = req.params;
+    await deleteUser(userId);
+    return sendSuccess(res, null, 'User removed successfully');
   } catch (error) {
     next(error);
   }

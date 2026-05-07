@@ -1,0 +1,10 @@
+$kind: http-request
+name: List Event Registrations
+method: GET
+url: '{{baseUrl}}/registrations/event/{{eventId}}'
+order: 3000
+queryParams:
+  - key: page
+    value: '1'
+  - key: pageSize
+    value: '10'

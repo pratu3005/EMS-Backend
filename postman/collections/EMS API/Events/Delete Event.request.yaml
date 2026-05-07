@@ -1,0 +1,10 @@
+$kind: http-request
+name: Delete Event
+method: DELETE
+url: '{{baseUrl}}/events/{{eventId}}'
+order: 5000
+auth:
+  type: bearer
+  credentials:
+    - key: token
+      value: '{{authToken}}'

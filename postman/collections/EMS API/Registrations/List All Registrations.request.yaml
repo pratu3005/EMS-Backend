@@ -1,0 +1,15 @@
+$kind: http-request
+name: List All Registrations
+method: GET
+url: '{{baseUrl}}/registrations'
+order: 4000
+auth:
+  type: bearer
+  credentials:
+    - key: token
+      value: '{{authToken}}'
+queryParams:
+  - key: page
+    value: '1'
+  - key: pageSize
+    value: '10'

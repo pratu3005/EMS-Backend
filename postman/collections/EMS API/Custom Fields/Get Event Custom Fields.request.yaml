@@ -1,0 +1,5 @@
+$kind: http-request
+name: Get Event Custom Fields
+method: GET
+url: '{{baseUrl}}/custom-fields/event/{{eventId}}'
+order: 1000

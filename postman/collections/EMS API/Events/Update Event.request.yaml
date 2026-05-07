@@ -1,0 +1,24 @@
+$kind: http-request
+name: Update Event
+method: PUT
+url: '{{baseUrl}}/events/{{eventId}}'
+order: 4000
+auth:
+  type: bearer
+  credentials:
+    - key: token
+      value: '{{authToken}}'
+headers:
+  - key: Content-Type
+    value: application/json
+body:
+  type: json
+  content: |-
+    {
+      "event_name": "Updated Tech Conference 2026",
+      "description": "Updated description",
+      "start_date_time": "2026-06-01T09:00:00Z",
+      "end_date_time": "2026-06-01T18:00:00Z",
+      "address": "456 New St, City",
+      "event_for": "all"
+    }

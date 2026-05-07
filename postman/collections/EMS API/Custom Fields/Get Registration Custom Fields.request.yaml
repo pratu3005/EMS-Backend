@@ -1,0 +1,5 @@
+$kind: http-request
+name: Get Registration Custom Fields
+method: GET
+url: '{{baseUrl}}/custom-fields/registration/{{registrationId}}'
+order: 3000
