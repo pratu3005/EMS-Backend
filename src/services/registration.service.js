@@ -50,10 +50,18 @@ export const processRegistration = async (registrationData) => {
     // Default status: pending (6)
     const registration = await client.query(
       `INSERT INTO event_registrations 
-       (participant_id, event_id, organization, designation, tssia_membership_id, registration_status_id, attendance_status_id, created_by) 
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8) 
+       (participant_id, event_id, organization, designation, tssia_membership_id, registration_status_id, attendance_status_id, created_by, responses) 
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) 
        RETURNING registration_id`,
-      [participantId, event_id, organization, designation, tssia_membership_id, 6, 9, created_by]
+      [
+        participantId, 
+        event_id, 
+        organization || registrationData.company_name, 
+        designation || registrationData.designation, 
+        tssia_membership_id || registrationData.membership_number, 
+        6, 9, created_by,
+        JSON.stringify(registrationData)
+      ]
     );
 
     const registrationId = registration.rows[0].registration_id;
@@ -117,74 +125,85 @@ export const getPassDetails = async (registrationId) => {
   return result.rows[0];
 };
 
-export const processScan = async (qrString, scannedBy) => {
+export const processScan = async (searchCode, scannedBy) => {
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
 
-    // 1. Find pass by QR code
-    const qrResult = await client.query(
-      `SELECT qr.pass_id, ps.registration_id, ps.pass_number, er.event_id, er.registration_status_id, er.attendance_status_id
-       FROM qr_codes qr
-       JOIN passes ps ON qr.pass_id = ps.pass_id
-       JOIN event_registrations er ON ps.registration_id = er.registration_id
-       WHERE qr.qr_code = $1 AND er.is_deleted = false`,
-      [qrString]
-    );
-
-    if (qrResult.rows.length === 0) {
-      throw new Error('Invalid QR code');
-    }
-
-    const { registration_id, event_id, pass_number, registration_status_id, attendance_status_id } = qrResult.rows[0];
-
-    // 2. Prevent duplicate scan (optional)
-    // Check if already present (attendance status 10)
-    if (attendance_status_id == 10) {
-       // throw new Error('Attendance already marked for this participant');
-       // Actually, maybe we allow re-scanning but just log it.
-       // User asked to "Prevent duplicate scan (optional)".
-    }
-
-    // 3. Insert into scan logs
-    await client.query(
-      'INSERT INTO scan_logs (event_id, registration_id, scanned_by) VALUES ($1, $2, $3)',
-      [event_id, registration_id, scannedBy]
-    );
-
-    // 4. Update attendance status to 'present' (10)
-    await client.query(
-      'UPDATE event_registrations SET attendance_status_id = 10, updated_at = NOW() WHERE registration_id = $1',
-      [registration_id]
-    );
-
-    // Get complete details for the response
-    const infoResult = await client.query(
-      `SELECT 
-          p.name as participant_name, p.email, p.phone,
-          e.event_name,
-          er.organization, er.designation,
-          ps.pass_number
+    // 1. Find registration by QR code OR Pass Number (passcode)
+    const result = await client.query(
+      `SELECT er.registration_id, er.event_id, er.registration_status_id, er.attendance_status_id,
+              rs.name as registration_status, as_status.name as attendance_status,
+              p.name as participant_name, p.email, p.phone,
+              e.event_name, er.organization, er.designation,
+              ps.pass_number
        FROM event_registrations er
        JOIN participants p ON er.participant_id = p.participant_id
        JOIN events e ON er.event_id = e.event_id
-       JOIN passes ps ON er.registration_id = ps.registration_id
-       WHERE er.registration_id = $1`,
-      [registration_id]
+       JOIN status_master rs ON er.registration_status_id = rs.status_id
+       JOIN status_master as_status ON er.attendance_status_id = as_status.status_id
+       LEFT JOIN passes ps ON er.registration_id = ps.registration_id
+       LEFT JOIN qr_codes qr ON ps.pass_id = qr.pass_id
+       WHERE (qr.qr_code = $1 OR ps.pass_number = $1) AND er.is_deleted = false`,
+      [searchCode]
+    );
+
+    if (result.rows.length === 0) {
+      throw new Error('Invalid: Code not found in database');
+    }
+
+    const registration = result.rows[0];
+
+    // 2. Check if registration is Approved
+    if (registration.registration_status.toLowerCase() !== 'approved' && 
+        registration.registration_status.toLowerCase() !== 'attended') {
+      throw new Error(`Invalid: Registration status is ${registration.registration_status}`);
+    }
+
+    // 3. Check for Duplicate
+    if (registration.attendance_status.toLowerCase() === 'attended' || 
+        registration.attendance_status.toLowerCase() === 'present') {
+      
+      // Log the duplicate attempt anyway
+      await client.query(
+        'INSERT INTO scan_logs (event_id, registration_id, scanned_by) VALUES ($1, $2, $3)',
+        [registration.event_id, registration.registration_id, scannedBy]
+      );
+      
+      await client.query('COMMIT');
+      
+      return {
+        ...registration,
+        scan_timestamp: new Date().toISOString(),
+        status: 'duplicate',
+        message: 'Already Scanned!'
+      };
+    }
+
+    // 4. Valid Scan - Mark Attendance
+    // Find 'Attended' status ID
+    const attendedStatus = await client.query(
+      "SELECT status_id FROM status_master WHERE type = 'attendance' AND name = 'attended'"
+    );
+    const statusId = attendedStatus.rows[0]?.status_id || 10;
+
+    await client.query(
+      'UPDATE event_registrations SET attendance_status_id = $1, updated_at = NOW() WHERE registration_id = $2',
+      [statusId, registration.registration_id]
+    );
+
+    await client.query(
+      'INSERT INTO scan_logs (event_id, registration_id, scanned_by) VALUES ($1, $2, $3)',
+      [registration.event_id, registration.registration_id, scannedBy]
     );
 
     await client.query('COMMIT');
 
     return {
-      participant_name: infoResult.rows[0].participant_name,
-      email: infoResult.rows[0].email,
-      phone: infoResult.rows[0].phone,
-      event_name: infoResult.rows[0].event_name,
-      organization: infoResult.rows[0].organization,
-      designation: infoResult.rows[0].designation,
-      pass_number: infoResult.rows[0].pass_number,
+      ...registration,
       scan_timestamp: new Date().toISOString(),
-      status: attendance_status_id == 10 ? 'duplicate' : 'valid'
+      status: 'valid',
+      message: 'Check-in Successful'
     };
   } catch (err) {
     await client.query('ROLLBACK');

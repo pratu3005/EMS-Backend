@@ -13,7 +13,7 @@ export const registerParticipant = async (req, res, next) => {
   try {
     const registrationData = {
       ...req.body,
-      created_by: req.user?.id || 1 // Fallback for testing
+      created_by: req.user?.user_id || null // Use authenticated user ID, allow null for public registrations
     };
 
     const result = await processRegistration(registrationData);

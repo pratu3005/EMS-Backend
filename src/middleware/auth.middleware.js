@@ -36,7 +36,10 @@ export const authorize = (allowedRoles = []) => {
       return sendError(res, 'User not authenticated', 401);
     }
 
-    if (!allowedRoles.includes(req.user.role_name)) {
+    const userRole = (req.user.role_name || '').toLowerCase();
+    const normalizedAllowedRoles = allowedRoles.map(role => role.toLowerCase());
+
+    if (!normalizedAllowedRoles.includes(userRole)) {
       return sendError(res, 'Insufficient permissions', 403);
     }
 

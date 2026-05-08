@@ -177,6 +177,8 @@ export const createEvent = async (eventData) => {
     organizerEmail,
     organizerPhone,
     organizerRole,
+    registrationFields,
+    successPageConfig,
   } = eventData;
 
   const result = await query(
@@ -184,14 +186,17 @@ export const createEvent = async (eventData) => {
       event_name, description, start_date_time, end_date_time, address, 
       event_for, image_id, capacity, entry_fee, category, 
       additional_info, organizer_name, organizer_email, organizer_phone, organizer_role,
+      registration_fields, success_page_config,
       is_deleted
     ) 
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, false) 
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, false) 
      RETURNING *`,
     [
       eventName, description, startDateTime, endDateTime, address, 
       eventFor, imageId, capacity, entryFee, category, 
-      additionalInfo, organizerName, organizerEmail, organizerPhone, organizerRole
+      additionalInfo, organizerName, organizerEmail, organizerPhone, organizerRole,
+      JSON.stringify(registrationFields || []),
+      JSON.stringify(successPageConfig || {})
     ]
   );
   return result.rows[0];
@@ -214,19 +219,24 @@ export const updateEvent = async (eventId, eventData) => {
     organizerEmail,
     organizerPhone,
     organizerRole,
+    registrationFields,
+    successPageConfig,
   } = eventData;
 
   const result = await query(
     `UPDATE events 
      SET event_name = $1, description = $2, start_date_time = $3, end_date_time = $4, address = $5, 
          event_for = $6, image_id = $7, capacity = $8, entry_fee = $9, category = $10, 
-         additional_info = $11, organizer_name = $12, organizer_email = $13, organizer_phone = $14, organizer_role = $15 
-     WHERE event_id = $16 AND is_deleted = false 
+         additional_info = $11, organizer_name = $12, organizer_email = $13, organizer_phone = $14, organizer_role = $15,
+         registration_fields = $16, success_page_config = $17
+     WHERE event_id = $18 AND is_deleted = false 
      RETURNING *`,
     [
       eventName, description, startDateTime, endDateTime, address, 
       eventFor, imageId, capacity, entryFee, category, 
       additionalInfo, organizerName, organizerEmail, organizerPhone, organizerRole,
+      JSON.stringify(registrationFields || []),
+      JSON.stringify(successPageConfig || {}),
       eventId
     ]
   );
@@ -327,11 +337,15 @@ export const getEventRegistrationCount = async (eventId) => {
 export const getAllRegistrations = async (limit = 10, offset = 0) => {
   const result = await query(
     `SELECT er.*, p.name as participant_name, p.email as participant_email, p.phone as participant_phone, 
-            e.event_name, sm.name as status_name 
+            e.event_name, e.start_date_time as event_start_date, e.address as event_address,
+            sm.name as status_name, 
+            ps.pass_number, qr.qr_code
      FROM event_registrations er 
      JOIN participants p ON er.participant_id = p.participant_id 
      JOIN events e ON er.event_id = e.event_id 
      JOIN status_master sm ON er.registration_status_id = sm.status_id 
+     LEFT JOIN passes ps ON er.registration_id = ps.registration_id
+     LEFT JOIN qr_codes qr ON ps.pass_id = qr.pass_id
      WHERE er.is_deleted = false AND p.is_deleted = false AND e.is_deleted = false 
      ORDER BY er.created_at DESC LIMIT $1 OFFSET $2`,
     [limit, offset]

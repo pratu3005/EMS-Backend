@@ -63,6 +63,8 @@ export const createNewEvent = async (req, res, next) => {
       category,
       additional_info,
       organizer_details,
+      registration_fields,
+      success_page_config,
     } = req.body;
 
     // Validation
@@ -112,8 +114,10 @@ export const createNewEvent = async (req, res, next) => {
       additionalInfo: additional_info || '',
       organizerName: organizer_details?.name || '',
       organizerEmail: organizer_details?.email || '',
-      organizerPhone: organizer_details?.phone || '',
-      organizerRole: organizer_details?.role || '',
+      organizerPhone: organizer_details?.phone || null,
+      organizerRole: organizer_details?.role || 'Event Organizer',
+      registrationFields: registration_fields || [],
+      successPageConfig: success_page_config || {},
     };
 
     const newEvent = await createEvent(eventData);
@@ -140,6 +144,8 @@ export const editEvent = async (req, res, next) => {
       category,
       additional_info,
       organizer_details,
+      registration_fields,
+      success_page_config,
     } = req.body;
 
     if (!eventId) {
@@ -189,6 +195,8 @@ export const editEvent = async (req, res, next) => {
       organizerEmail: organizer_details?.email || event.organizer_email,
       organizerPhone: organizer_details?.phone || event.organizer_phone,
       organizerRole: organizer_details?.role || event.organizer_role,
+      registrationFields: registration_fields || event.registration_fields,
+      successPageConfig: success_page_config || event.success_page_config,
     };
 
     const updatedEvent = await updateEvent(eventId, eventData);
