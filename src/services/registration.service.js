@@ -164,10 +164,10 @@ export const processScan = async (searchCode, scannedBy) => {
     if (registration.attendance_status.toLowerCase() === 'attended' || 
         registration.attendance_status.toLowerCase() === 'present') {
       
-      // Log the duplicate attempt anyway
+      // Log the duplicate attempt
       await client.query(
-        'INSERT INTO scan_logs (event_id, registration_id, scanned_by) VALUES ($1, $2, $3)',
-        [registration.event_id, registration.registration_id, scannedBy]
+        'INSERT INTO scan_logs (event_id, registration_id, scanned_by, scan_status) VALUES ($1, $2, $3, $4)',
+        [registration.event_id, registration.registration_id, scannedBy, 'duplicate']
       );
       
       await client.query('COMMIT');
@@ -187,14 +187,16 @@ export const processScan = async (searchCode, scannedBy) => {
     );
     const statusId = attendedStatus.rows[0]?.status_id || 10;
 
+    // Update registration with verifier info and status
     await client.query(
-      'UPDATE event_registrations SET attendance_status_id = $1, updated_at = NOW() WHERE registration_id = $2',
-      [statusId, registration.registration_id]
+      'UPDATE event_registrations SET attendance_status_id = $1, verified_by = $2, verified_at = NOW(), updated_at = NOW() WHERE registration_id = $3',
+      [statusId, scannedBy, registration.registration_id]
     );
 
+    // Log the valid scan
     await client.query(
-      'INSERT INTO scan_logs (event_id, registration_id, scanned_by) VALUES ($1, $2, $3)',
-      [registration.event_id, registration.registration_id, scannedBy]
+      'INSERT INTO scan_logs (event_id, registration_id, scanned_by, scan_status) VALUES ($1, $2, $3, $4)',
+      [registration.event_id, registration.registration_id, scannedBy, 'valid']
     );
 
     await client.query('COMMIT');

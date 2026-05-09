@@ -13,7 +13,7 @@ const pool = new Pool({
 });
 
 async function check() {
-  const res = await pool.query("SELECT table_name, column_name FROM information_schema.columns WHERE table_schema = 'public' ORDER BY table_name");
+  const res = await pool.query("SELECT username, email, role_id FROM users WHERE is_deleted = false");
   console.log(JSON.stringify(res.rows, null, 2));
   await pool.end();
 }

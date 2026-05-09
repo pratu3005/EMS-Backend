@@ -314,11 +314,14 @@ export const checkDuplicateRegistration = async (participantId, eventId) => {
 
 export const getEventRegistrations = async (eventId, limit = 10, offset = 0) => {
   const result = await query(
-    `SELECT er.*, p.name, p.email, p.phone, rs.name as registration_status, as_status.name as attendance_status 
+    `SELECT er.*, p.name, p.email, p.phone, 
+            rs.name as registration_status, as_status.name as attendance_status,
+            u.name as verified_by_name, er.verified_at as attended_at
      FROM event_registrations er 
      JOIN participants p ON er.participant_id = p.participant_id 
      LEFT JOIN status_master rs ON er.registration_status_id = rs.status_id AND rs.type = 'registration'
      LEFT JOIN status_master as_status ON er.attendance_status_id = as_status.status_id AND as_status.type = 'attendance'
+     LEFT JOIN users u ON er.verified_by = u.user_id
      WHERE er.event_id = $1 AND er.is_deleted = false AND p.is_deleted = false 
      ORDER BY er.created_at DESC LIMIT $2 OFFSET $3`,
     [eventId, limit, offset]
@@ -339,13 +342,15 @@ export const getAllRegistrations = async (limit = 10, offset = 0) => {
     `SELECT er.*, p.name as participant_name, p.email as participant_email, p.phone as participant_phone, 
             e.event_name, e.start_date_time as event_start_date, e.address as event_address,
             sm.name as status_name, 
-            ps.pass_number, qr.qr_code
+            ps.pass_number, qr.qr_code,
+            u.name as verified_by_name, er.verified_at as attended_at
      FROM event_registrations er 
      JOIN participants p ON er.participant_id = p.participant_id 
      JOIN events e ON er.event_id = e.event_id 
      JOIN status_master sm ON er.registration_status_id = sm.status_id 
      LEFT JOIN passes ps ON er.registration_id = ps.registration_id
      LEFT JOIN qr_codes qr ON ps.pass_id = qr.pass_id
+     LEFT JOIN users u ON er.verified_by = u.user_id
      WHERE er.is_deleted = false AND p.is_deleted = false AND e.is_deleted = false 
      ORDER BY er.created_at DESC LIMIT $1 OFFSET $2`,
     [limit, offset]
