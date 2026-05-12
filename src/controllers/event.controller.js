@@ -4,7 +4,10 @@ import {
   createEvent,
   updateEvent,
   softDeleteEvent,
+  permanentDeleteEvent,
   getEventCount,
+  getAdminDraftEvent,
+  publishEvent,
 } from '../services/db.service.js';
 import { sendSuccess, sendError, sendPaginated } from '../utils/response.js';
 import {
@@ -50,6 +53,7 @@ export const getEvent = async (req, res, next) => {
 
 export const createNewEvent = async (req, res, next) => {
   try {
+    const userId = req.user?.user_id;
     const {
       event_name,
       description,
@@ -65,48 +69,62 @@ export const createNewEvent = async (req, res, next) => {
       organizer_details,
       registration_fields,
       success_page_config,
+      is_draft = true,
     } = req.body;
 
-    // Validation
-    if (!validateRequired(event_name)) {
-      return sendError(res, 'Event name is required', 400);
-    }
-
-    if (!validateRequired(description)) {
-      return sendError(res, 'Description is required', 400);
-    }
-
-    if (!validateDatetime(start_date_time)) {
-      return sendError(res, 'Invalid start date/time format', 400);
-    }
-
-    if (!validateDatetime(end_date_time)) {
-      return sendError(res, 'Invalid end date/time format', 400);
-    }
-
-    if (new Date(start_date_time) >= new Date(end_date_time)) {
-      return sendError(res, 'Start date must be before end date', 400);
-    }
-
-    if (!validateRequired(address)) {
-      return sendError(res, 'Address is required', 400);
-    }
-
-    if (!validateEventFor(event_for)) {
+    // Check for existing draft event
+    const existingDraft = await getAdminDraftEvent(userId);
+    if (existingDraft) {
       return sendError(
         res,
-        'Event for must be either "all" or "tssia_members"',
-        400
+        'You already have a draft event. Please publish or delete it before creating a new one.',
+        400,
+        { existing_draft_id: existingDraft.event_id }
       );
     }
 
+    // Validation for non-draft events
+    if (!is_draft) {
+      if (!validateRequired(event_name)) {
+        return sendError(res, 'Event name is required', 400);
+      }
+
+      if (!validateRequired(description)) {
+        return sendError(res, 'Description is required', 400);
+      }
+
+      if (!validateDatetime(start_date_time)) {
+        return sendError(res, 'Invalid start date/time format', 400);
+      }
+
+      if (!validateDatetime(end_date_time)) {
+        return sendError(res, 'Invalid end date/time format', 400);
+      }
+
+      if (new Date(start_date_time) >= new Date(end_date_time)) {
+        return sendError(res, 'Start date must be before end date', 400);
+      }
+
+      if (!validateRequired(address)) {
+        return sendError(res, 'Address is required', 400);
+      }
+
+      if (!validateEventFor(event_for)) {
+        return sendError(
+          res,
+          'Event for must be either "all" or "tssia_members"',
+          400
+        );
+      }
+    }
+
     const eventData = {
-      eventName: event_name,
-      description,
-      startDateTime: start_date_time,
-      endDateTime: end_date_time,
-      address,
-      eventFor: event_for,
+      eventName: event_name || 'Untitled Event',
+      description: description || '',
+      startDateTime: start_date_time || null,
+      endDateTime: end_date_time || null,
+      address: address || '',
+      eventFor: event_for || 'all',
       imageId: image_id || null,
       capacity: capacity || null,
       entryFee: entry_fee || 0,
@@ -118,11 +136,18 @@ export const createNewEvent = async (req, res, next) => {
       organizerRole: organizer_details?.role || 'Event Organizer',
       registrationFields: registration_fields || [],
       successPageConfig: success_page_config || {},
+      isDraft: is_draft,
+      createdBy: userId || null,
     };
 
     const newEvent = await createEvent(eventData);
 
-    return sendSuccess(res, newEvent, 'Event created successfully', 201);
+    return sendSuccess(
+      res,
+      newEvent,
+      is_draft ? 'Draft event created successfully' : 'Event published successfully',
+      201
+    );
   } catch (error) {
     next(error);
   }
@@ -131,6 +156,7 @@ export const createNewEvent = async (req, res, next) => {
 export const editEvent = async (req, res, next) => {
   try {
     const { eventId } = req.params;
+    const userId = req.user?.user_id;
     const {
       event_name,
       description,
@@ -146,6 +172,7 @@ export const editEvent = async (req, res, next) => {
       organizer_details,
       registration_fields,
       success_page_config,
+      is_draft,
     } = req.body;
 
     if (!eventId) {
@@ -158,25 +185,33 @@ export const editEvent = async (req, res, next) => {
       return sendError(res, 'Event not found', 404);
     }
 
-    // Validation
-    if (event_name && !validateRequired(event_name)) {
-      return sendError(res, 'Event name cannot be empty', 400);
-    }
-
-    if (start_date_time && !validateDatetime(start_date_time)) {
-      return sendError(res, 'Invalid start date/time format', 400);
-    }
-
-    if (end_date_time && !validateDatetime(end_date_time)) {
-      return sendError(res, 'Invalid end date/time format', 400);
-    }
-
-    if (event_for && !validateEventFor(event_for)) {
-      return sendError(
-        res,
-        'Event for must be either "all" or "tssia_members"',
-        400
-      );
+    // Validation for publishing (is_draft = false)
+    if (is_draft === false) {
+      if (!event_name || !validateRequired(event_name)) {
+        return sendError(res, 'Event name is required to publish', 400);
+      }
+      if (!description || !validateRequired(description)) {
+        return sendError(res, 'Description is required to publish', 400);
+      }
+      if (!start_date_time || !validateDatetime(start_date_time)) {
+        return sendError(res, 'Valid start date/time is required to publish', 400);
+      }
+      if (!end_date_time || !validateDatetime(end_date_time)) {
+        return sendError(res, 'Valid end date/time is required to publish', 400);
+      }
+      if (new Date(start_date_time) >= new Date(end_date_time)) {
+        return sendError(res, 'Start date must be before end date', 400);
+      }
+      if (!address || !validateRequired(address)) {
+        return sendError(res, 'Address is required to publish', 400);
+      }
+      if (event_for && !validateEventFor(event_for)) {
+        return sendError(
+          res,
+          'Event for must be either "all" or "tssia_members"',
+          400
+        );
+      }
     }
 
     const eventData = {
@@ -197,11 +232,18 @@ export const editEvent = async (req, res, next) => {
       organizerRole: organizer_details?.role || event.organizer_role,
       registrationFields: registration_fields || event.registration_fields,
       successPageConfig: success_page_config || event.success_page_config,
+      isDraft: is_draft !== undefined ? is_draft : event.is_draft,
+      updatedBy: userId || null,
     };
 
     const updatedEvent = await updateEvent(eventId, eventData);
 
-    return sendSuccess(res, updatedEvent, 'Event updated successfully');
+    let message = 'Event updated successfully';
+    if (is_draft === false && event.is_draft) {
+      message = 'Event published successfully';
+    }
+
+    return sendSuccess(res, updatedEvent, message);
   } catch (error) {
     next(error);
   }
@@ -220,9 +262,70 @@ export const deleteEvent = async (req, res, next) => {
       return sendError(res, 'Event not found', 404);
     }
 
-    const deletedEvent = await softDeleteEvent(eventId);
+    const deletedEvent = await permanentDeleteEvent(eventId);
 
     return sendSuccess(res, deletedEvent, 'Event deleted successfully');
+  } catch (error) {
+    next(error);
+  }
+};
+
+// Get admin's draft event
+export const getDraftEvent = async (req, res, next) => {
+  try {
+    const userId = req.user?.user_id;
+
+    if (!userId) {
+      return sendError(res, 'User ID is required', 400);
+    }
+
+    const draftEvent = await getAdminDraftEvent(userId);
+
+    if (!draftEvent) {
+      return sendSuccess(res, null, 'No draft event found');
+    }
+
+    return sendSuccess(res, draftEvent);
+  } catch (error) {
+    next(error);
+  }
+};
+
+// Publish draft event
+export const publishDraftEvent = async (req, res, next) => {
+  try {
+    const { eventId } = req.params;
+    const userId = req.user?.user_id;
+
+    if (!eventId) {
+      return sendError(res, 'Event ID is required', 400);
+    }
+
+    const event = await getEventById(eventId);
+    if (!event) {
+      return sendError(res, 'Event not found', 404);
+    }
+
+    if (event.created_by !== userId) {
+      return sendError(res, 'Unauthorized: You can only publish your own draft events', 403);
+    }
+
+    if (!event.is_draft) {
+      return sendError(res, 'Event is already published', 400);
+    }
+
+    // Validate required fields
+    if (!event.event_name || !event.description || !event.start_date_time || 
+        !event.end_date_time || !event.address) {
+      return sendError(
+        res,
+        'Event is missing required fields. Please complete all fields before publishing.',
+        400
+      );
+    }
+
+    const publishedEvent = await publishEvent(eventId, userId);
+    return sendSuccess(res, publishedEvent, 'Event published successfully');
   } catch (error) {
     next(error);
   }

@@ -18,6 +18,24 @@ export const processRegistration = async (registrationData) => {
   try {
     await client.query('BEGIN');
 
+    // 0. Get status IDs from status_master
+    const regPendingStatus = await client.query(
+      "SELECT status_id FROM status_master WHERE type = 'registration' AND name = 'pending'"
+    );
+    const attPendingStatus = await client.query(
+      "SELECT status_id FROM status_master WHERE type = 'attendance' AND name = 'pending'"
+    );
+
+    if (regPendingStatus.rows.length === 0) {
+      throw new Error('Registration pending status not found in status_master');
+    }
+    if (attPendingStatus.rows.length === 0) {
+      throw new Error('Attendance pending status not found in status_master');
+    }
+
+    const regStatusId = regPendingStatus.rows[0].status_id;
+    const attStatusId = attPendingStatus.rows[0].status_id;
+
     // 1. Check if participant exists
     let participantId;
     const participantCheck = await client.query(
@@ -47,7 +65,7 @@ export const processRegistration = async (registrationData) => {
     }
 
     // 3. Create event registration
-    // Default status: pending (6)
+    // Use dynamic status IDs from status_master
     const registration = await client.query(
       `INSERT INTO event_registrations 
        (participant_id, event_id, organization, designation, tssia_membership_id, registration_status_id, attendance_status_id, created_by, responses) 
@@ -59,7 +77,7 @@ export const processRegistration = async (registrationData) => {
         organization || registrationData.company_name, 
         designation || registrationData.designation, 
         tssia_membership_id || registrationData.membership_number, 
-        6, 9, created_by,
+        regStatusId, attStatusId, created_by,
         JSON.stringify(registrationData)
       ]
     );
@@ -135,7 +153,7 @@ export const processScan = async (searchCode, scannedBy) => {
       `SELECT er.registration_id, er.event_id, er.registration_status_id, er.attendance_status_id,
               rs.name as registration_status, as_status.name as attendance_status,
               p.name as participant_name, p.email, p.phone,
-              e.event_name, er.organization, er.designation,
+              e.event_name, e.start_date_time, er.organization, er.designation,
               ps.pass_number
        FROM event_registrations er
        JOIN participants p ON er.participant_id = p.participant_id
@@ -160,7 +178,16 @@ export const processScan = async (searchCode, scannedBy) => {
       throw new Error(`Invalid: Registration status is ${registration.registration_status}`);
     }
 
-    // 3. Check for Duplicate
+    // 3. Check if scan is within 2 hours before event start time
+    const eventStartTime = new Date(registration.start_date_time);
+    const currentTime = new Date();
+    const twoHoursBeforeEvent = new Date(eventStartTime.getTime() - (2 * 60 * 60 * 1000));
+    
+    if (currentTime < twoHoursBeforeEvent) {
+      throw new Error(`Scanning not allowed: Event starts in more than 2 hours. Event begins at ${eventStartTime.toLocaleString()}`);
+    }
+
+    // 4. Check for Duplicate
     if (registration.attendance_status.toLowerCase() === 'attended' || 
         registration.attendance_status.toLowerCase() === 'present') {
       
@@ -180,7 +207,7 @@ export const processScan = async (searchCode, scannedBy) => {
       };
     }
 
-    // 4. Valid Scan - Mark Attendance
+    // 5. Valid Scan - Mark Attendance
     // Find 'Attended' status ID
     const attendedStatus = await client.query(
       "SELECT status_id FROM status_master WHERE type = 'attendance' AND name = 'attended'"

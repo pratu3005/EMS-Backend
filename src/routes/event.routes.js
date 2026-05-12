@@ -5,6 +5,8 @@ import {
   createNewEvent,
   editEvent,
   deleteEvent,
+  getDraftEvent,
+  publishDraftEvent,
 } from '../controllers/event.controller.js';
 import { authenticate, adminOnly } from '../middleware/auth.middleware.js';
 
@@ -18,5 +20,9 @@ router.get('/:eventId', getEvent);
 router.post('/', authenticate, adminOnly, createNewEvent);
 router.put('/:eventId', authenticate, adminOnly, editEvent);
 router.delete('/:eventId', authenticate, adminOnly, deleteEvent);
+
+// Draft management routes
+router.get('/user/draft', authenticate, adminOnly, getDraftEvent);
+router.put('/:eventId/publish', authenticate, adminOnly, publishDraftEvent);
 
 export default router;

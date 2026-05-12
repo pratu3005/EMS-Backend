@@ -179,7 +179,13 @@ export const createEvent = async (eventData) => {
     organizerRole,
     registrationFields,
     successPageConfig,
+    isDraft = true,
+    createdBy,
   } = eventData;
+
+  const eventStatus = isDraft ? 'draft' : 'published';
+  const draftSavedAt = isDraft ? new Date().toISOString() : null;
+  const publishedAt = !isDraft ? new Date().toISOString() : null;
 
   const result = await query(
     `INSERT INTO events (
@@ -187,16 +193,18 @@ export const createEvent = async (eventData) => {
       event_for, image_id, capacity, entry_fee, category, 
       additional_info, organizer_name, organizer_email, organizer_phone, organizer_role,
       registration_fields, success_page_config,
+      is_draft, event_status, draft_saved_at, published_at, created_by,
       is_deleted
     ) 
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, false) 
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, false) 
      RETURNING *`,
     [
       eventName, description, startDateTime, endDateTime, address, 
       eventFor, imageId, capacity, entryFee, category, 
       additionalInfo, organizerName, organizerEmail, organizerPhone, organizerRole,
       JSON.stringify(registrationFields || []),
-      JSON.stringify(successPageConfig || {})
+      JSON.stringify(successPageConfig || {}),
+      isDraft, eventStatus, draftSavedAt, publishedAt, createdBy
     ]
   );
   return result.rows[0];
@@ -221,24 +229,46 @@ export const updateEvent = async (eventId, eventData) => {
     organizerRole,
     registrationFields,
     successPageConfig,
+    isDraft,
+    updatedBy,
   } = eventData;
+
+  let updateFields = `
+    event_name = $1, description = $2, start_date_time = $3, end_date_time = $4, address = $5, 
+    event_for = $6, image_id = $7, capacity = $8, entry_fee = $9, category = $10, 
+    additional_info = $11, organizer_name = $12, organizer_email = $13, organizer_phone = $14, organizer_role = $15,
+    registration_fields = $16, success_page_config = $17
+  `;
+  let params = [
+    eventName, description, startDateTime, endDateTime, address, 
+    eventFor, imageId, capacity, entryFee, category, 
+    additionalInfo, organizerName, organizerEmail, organizerPhone, organizerRole,
+    JSON.stringify(registrationFields || []),
+    JSON.stringify(successPageConfig || {}),
+    eventId
+  ];
+
+  // Handle draft status changes
+  if (isDraft !== undefined) {
+    const eventStatus = isDraft ? 'draft' : 'published';
+    const draftSavedAt = isDraft ? new Date().toISOString() : null;
+    const publishedAt = !isDraft ? new Date().toISOString() : null;
+    
+    updateFields += `, is_draft = $18, event_status = $19, draft_saved_at = $20, published_at = $21`;
+    params.splice(params.length - 1, 0, isDraft, eventStatus, draftSavedAt, publishedAt);
+  }
+
+  if (updatedBy !== undefined) {
+    updateFields += `, updated_by = $${params.length + 1}`;
+    params.splice(params.length - 1, 0, updatedBy);
+  }
 
   const result = await query(
     `UPDATE events 
-     SET event_name = $1, description = $2, start_date_time = $3, end_date_time = $4, address = $5, 
-         event_for = $6, image_id = $7, capacity = $8, entry_fee = $9, category = $10, 
-         additional_info = $11, organizer_name = $12, organizer_email = $13, organizer_phone = $14, organizer_role = $15,
-         registration_fields = $16, success_page_config = $17
-     WHERE event_id = $18 AND is_deleted = false 
+     SET ${updateFields}
+     WHERE event_id = $${params.length}
      RETURNING *`,
-    [
-      eventName, description, startDateTime, endDateTime, address, 
-      eventFor, imageId, capacity, entryFee, category, 
-      additionalInfo, organizerName, organizerEmail, organizerPhone, organizerRole,
-      JSON.stringify(registrationFields || []),
-      JSON.stringify(successPageConfig || {}),
-      eventId
-    ]
+    params
   );
   return result.rows[0] || null;
 };
@@ -247,6 +277,96 @@ export const softDeleteEvent = async (eventId) => {
   const result = await query(
     'UPDATE events SET is_deleted = true WHERE event_id = $1 RETURNING *',
     [eventId]
+  );
+  return result.rows[0] || null;
+};
+
+export const permanentDeleteEvent = async (eventId) => {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    const registrationResult = await client.query(
+      'SELECT registration_id, participant_id FROM event_registrations WHERE event_id = $1',
+      [eventId]
+    );
+
+    const registrationIds = registrationResult.rows.map((row) => row.registration_id);
+    const participantIds = [...new Set(registrationResult.rows.map((row) => row.participant_id))];
+
+    // Remove scans tied to this event and its registrations
+    await client.query('DELETE FROM scan_logs WHERE event_id = $1', [eventId]);
+
+    if (registrationIds.length > 0) {
+      await client.query(
+        'DELETE FROM custom_field_responses WHERE registration_id = ANY($1)',
+        [registrationIds]
+      );
+      await client.query(
+        'DELETE FROM qr_codes WHERE pass_id IN (SELECT pass_id FROM passes WHERE registration_id = ANY($1))',
+        [registrationIds]
+      );
+      await client.query(
+        'DELETE FROM passes WHERE registration_id = ANY($1)',
+        [registrationIds]
+      );
+      await client.query(
+        'DELETE FROM event_registrations WHERE registration_id = ANY($1)',
+        [registrationIds]
+      );
+    }
+
+    await client.query('DELETE FROM custom_fields WHERE event_id = $1', [eventId]);
+    await client.query('DELETE FROM ticket_templates WHERE event_id = $1', [eventId]);
+    await client.query('DELETE FROM user_events WHERE event_id = $1', [eventId]);
+
+    const deletedEventResult = await client.query(
+      'DELETE FROM events WHERE event_id = $1 RETURNING *',
+      [eventId]
+    );
+
+    if (participantIds.length > 0) {
+      await client.query(
+        `DELETE FROM participants p
+         WHERE p.participant_id = ANY($1)
+           AND NOT EXISTS (
+             SELECT 1 FROM event_registrations er
+             WHERE er.participant_id = p.participant_id
+           )`,
+        [participantIds]
+      );
+    }
+
+    await client.query('COMMIT');
+    return deletedEventResult.rows[0] || null;
+  } catch (error) {
+    await client.query('ROLLBACK');
+    throw error;
+  } finally {
+    client.release();
+  }
+};
+
+// Get admin's draft event (only one allowed per admin)
+export const getAdminDraftEvent = async (userId) => {
+  const result = await query(
+    `SELECT e.*, i.url as image_url FROM events e 
+     LEFT JOIN images i ON e.image_id = i.image_id 
+     WHERE e.created_by = $1 AND e.is_draft = true AND e.is_deleted = false`,
+    [userId]
+  );
+  return result.rows[0] || null;
+};
+
+// Publish draft event (change from draft to published)
+export const publishEvent = async (eventId, userId) => {
+  const publishedAt = new Date().toISOString();
+  const result = await query(
+    `UPDATE events 
+     SET is_draft = false, event_status = 'published', published_at = $1, updated_by = $2
+     WHERE event_id = $3 AND is_deleted = false
+     RETURNING *`,
+    [publishedAt, userId, eventId]
   );
   return result.rows[0] || null;
 };
@@ -314,11 +434,19 @@ export const checkDuplicateRegistration = async (participantId, eventId) => {
 
 export const getEventRegistrations = async (eventId, limit = 10, offset = 0) => {
   const result = await query(
-    `SELECT er.*, p.name, p.email, p.phone, rs.name as registration_status, as_status.name as attendance_status 
+    `SELECT er.*, p.name as participant_name, p.email as participant_email, p.phone as participant_phone, 
+            e.event_name,
+            rs.name as registration_status, rs.name as status_name,
+            as_status.name as attendance_status,
+            ps.pass_number, ps.pass_id,
+            qr.qr_code
      FROM event_registrations er 
      JOIN participants p ON er.participant_id = p.participant_id 
+     JOIN events e ON er.event_id = e.event_id
      LEFT JOIN status_master rs ON er.registration_status_id = rs.status_id AND rs.type = 'registration'
      LEFT JOIN status_master as_status ON er.attendance_status_id = as_status.status_id AND as_status.type = 'attendance'
+     LEFT JOIN passes ps ON er.registration_id = ps.registration_id
+     LEFT JOIN qr_codes qr ON ps.pass_id = qr.pass_id
      WHERE er.event_id = $1 AND er.is_deleted = false AND p.is_deleted = false 
      ORDER BY er.created_at DESC LIMIT $2 OFFSET $3`,
     [eventId, limit, offset]

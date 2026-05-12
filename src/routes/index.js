@@ -7,6 +7,8 @@ import passRoutes from './pass.routes.js';
 import customFieldRoutes from './customfield.routes.js';
 import scanRoutes from './scan.routes.js';
 import dashboardRoutes from './dashboard.routes.js';
+import ticketRoutes from './ticket.routes.js';
+import imageRoutes from './image.routes.js';
 
 const router = express.Router();
 
@@ -36,6 +38,8 @@ router.use('/passes', passRoutes);
 router.use('/custom-fields', customFieldRoutes);
 router.use('/scans', scanRoutes);
 router.use('/dashboard', dashboardRoutes);
+router.use('/tickets', ticketRoutes);
+router.use('/images', imageRoutes);
 
 // Health check
 router.get('/health', (req, res) => {
