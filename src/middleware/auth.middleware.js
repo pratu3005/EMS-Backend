@@ -7,7 +7,15 @@ export const authenticate = async (req, res, next) => {
     const token = req.headers.authorization?.split(' ')[1];
 
     if (!token) {
-      return sendError(res, 'No token provided', 401);
+      // Check for database-backed session
+      if (req.session && req.session.userId) {
+        const user = await getUserById(req.session.userId);
+        if (user) {
+          req.user = user;
+          return next();
+        }
+      }
+      return sendError(res, 'No token or session provided', 401);
     }
 
     const decoded = verifyToken(token);

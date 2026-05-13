@@ -9,6 +9,7 @@ import scanRoutes from './scan.routes.js';
 import dashboardRoutes from './dashboard.routes.js';
 import ticketRoutes from './ticket.routes.js';
 import imageRoutes from './image.routes.js';
+import sponsorRoutes from './sponsor.routes.js';
 
 const router = express.Router();
 
@@ -25,6 +26,7 @@ router.get('/', (req, res) => {
       customFields: '/custom-fields',
       scans: '/scans',
       dashboard: '/dashboard',
+      sponsors: '/sponsors',
     },
   });
 });
@@ -40,6 +42,7 @@ router.use('/scans', scanRoutes);
 router.use('/dashboard', dashboardRoutes);
 router.use('/tickets', ticketRoutes);
 router.use('/images', imageRoutes);
+router.use('/sponsors', sponsorRoutes);
 
 // Health check
 router.get('/health', (req, res) => {

@@ -196,7 +196,7 @@ export const createEvent = async (eventData) => {
       is_draft, event_status, draft_saved_at, published_at, created_by,
       is_deleted
     ) 
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, false) 
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, false) 
      RETURNING *`,
     [
       eventName, description, startDateTime, endDateTime, address, 
@@ -233,20 +233,79 @@ export const updateEvent = async (eventId, eventData) => {
     updatedBy,
   } = eventData;
 
-  let updateFields = `
-    event_name = $1, description = $2, start_date_time = $3, end_date_time = $4, address = $5, 
-    event_for = $6, image_id = $7, capacity = $8, entry_fee = $9, category = $10, 
-    additional_info = $11, organizer_name = $12, organizer_email = $13, organizer_phone = $14, organizer_role = $15,
-    registration_fields = $16, success_page_config = $17
-  `;
-  let params = [
-    eventName, description, startDateTime, endDateTime, address, 
-    eventFor, imageId, capacity, entryFee, category, 
-    additionalInfo, organizerName, organizerEmail, organizerPhone, organizerRole,
-    JSON.stringify(registrationFields || []),
-    JSON.stringify(successPageConfig || {}),
-    eventId
-  ];
+  let paramIndex = 1;
+  let updateFields = [];
+  let params = [];
+
+  // Add base fields
+  if (eventName !== undefined) {
+    updateFields.push(`event_name = $${paramIndex++}`);
+    params.push(eventName);
+  }
+  if (description !== undefined) {
+    updateFields.push(`description = $${paramIndex++}`);
+    params.push(description);
+  }
+  if (startDateTime !== undefined) {
+    updateFields.push(`start_date_time = $${paramIndex++}`);
+    params.push(startDateTime);
+  }
+  if (endDateTime !== undefined) {
+    updateFields.push(`end_date_time = $${paramIndex++}`);
+    params.push(endDateTime);
+  }
+  if (address !== undefined) {
+    updateFields.push(`address = $${paramIndex++}`);
+    params.push(address);
+  }
+  if (eventFor !== undefined) {
+    updateFields.push(`event_for = $${paramIndex++}`);
+    params.push(eventFor);
+  }
+  if (imageId !== undefined) {
+    updateFields.push(`image_id = $${paramIndex++}`);
+    params.push(imageId);
+  }
+  if (capacity !== undefined) {
+    updateFields.push(`capacity = $${paramIndex++}`);
+    params.push(capacity);
+  }
+  if (entryFee !== undefined) {
+    updateFields.push(`entry_fee = $${paramIndex++}`);
+    params.push(entryFee);
+  }
+  if (category !== undefined) {
+    updateFields.push(`category = $${paramIndex++}`);
+    params.push(category);
+  }
+  if (additionalInfo !== undefined) {
+    updateFields.push(`additional_info = $${paramIndex++}`);
+    params.push(additionalInfo);
+  }
+  if (organizerName !== undefined) {
+    updateFields.push(`organizer_name = $${paramIndex++}`);
+    params.push(organizerName);
+  }
+  if (organizerEmail !== undefined) {
+    updateFields.push(`organizer_email = $${paramIndex++}`);
+    params.push(organizerEmail);
+  }
+  if (organizerPhone !== undefined) {
+    updateFields.push(`organizer_phone = $${paramIndex++}`);
+    params.push(organizerPhone);
+  }
+  if (organizerRole !== undefined) {
+    updateFields.push(`organizer_role = $${paramIndex++}`);
+    params.push(organizerRole);
+  }
+  if (registrationFields !== undefined) {
+    updateFields.push(`registration_fields = $${paramIndex++}`);
+    params.push(JSON.stringify(registrationFields || []));
+  }
+  if (successPageConfig !== undefined) {
+    updateFields.push(`success_page_config = $${paramIndex++}`);
+    params.push(JSON.stringify(successPageConfig || {}));
+  }
 
   // Handle draft status changes
   if (isDraft !== undefined) {
@@ -254,19 +313,25 @@ export const updateEvent = async (eventId, eventData) => {
     const draftSavedAt = isDraft ? new Date().toISOString() : null;
     const publishedAt = !isDraft ? new Date().toISOString() : null;
     
-    updateFields += `, is_draft = $18, event_status = $19, draft_saved_at = $20, published_at = $21`;
-    params.splice(params.length - 1, 0, isDraft, eventStatus, draftSavedAt, publishedAt);
+    updateFields.push(`is_draft = $${paramIndex++}`);
+    updateFields.push(`event_status = $${paramIndex++}`);
+    updateFields.push(`draft_saved_at = $${paramIndex++}`);
+    updateFields.push(`published_at = $${paramIndex++}`);
+    params.push(isDraft, eventStatus, draftSavedAt, publishedAt);
   }
 
   if (updatedBy !== undefined) {
-    updateFields += `, updated_by = $${params.length + 1}`;
-    params.splice(params.length - 1, 0, updatedBy);
+    updateFields.push(`updated_by = $${paramIndex++}`);
+    params.push(updatedBy);
   }
+
+  // Add eventId as the last parameter
+  params.push(eventId);
 
   const result = await query(
     `UPDATE events 
-     SET ${updateFields}
-     WHERE event_id = $${params.length}
+     SET ${updateFields.join(', ')}
+     WHERE event_id = $${paramIndex}
      RETURNING *`,
     params
   );

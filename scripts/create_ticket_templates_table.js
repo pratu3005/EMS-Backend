@@ -4,12 +4,14 @@ const createTicketTemplatesTable = async () => {
   try {
     const createQuery = `
       CREATE TABLE IF NOT EXISTS ticket_templates (
-        id SERIAL PRIMARY KEY,
+        template_id SERIAL PRIMARY KEY,
         event_id INTEGER NOT NULL REFERENCES events(event_id) ON DELETE CASCADE,
         template_type VARCHAR(50) NOT NULL DEFAULT 'classic',
         config JSONB NOT NULL DEFAULT '{}',
         custom_text JSONB DEFAULT '{}',
         logo TEXT,
+        sponsor_text TEXT,
+        sponsor_image_id INTEGER REFERENCES images(image_id),
         created_at TIMESTAMP DEFAULT NOW(),
         updated_at TIMESTAMP DEFAULT NOW(),
         UNIQUE(event_id)

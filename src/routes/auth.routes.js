@@ -6,6 +6,7 @@ import {
   listAllUsers,
   updateVerifierEvents,
   removeUser,
+  logout,
 } from '../controllers/auth.controller.js';
 import { authenticate } from '../middleware/auth.middleware.js';
 
@@ -20,5 +21,6 @@ router.get('/profile', authenticate, getProfile);
 router.get('/users', authenticate, listAllUsers);
 router.patch('/users/:userId/events', authenticate, updateVerifierEvents);
 router.delete('/users/:userId', authenticate, removeUser);
+router.post('/logout', logout);
 
 export default router;

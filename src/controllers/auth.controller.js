@@ -110,6 +110,11 @@ export const login = async (req, res, next) => {
 
     const userWithRole = await getUserById(user.user_id);
 
+    // Save to session for DB persistence
+    if (req.session) {
+      req.session.userId = user.user_id;
+    }
+
     return sendSuccess(res, {
       user: {
         user_id: userWithRole.user_id,
@@ -173,5 +178,19 @@ export const removeUser = async (req, res, next) => {
     return sendSuccess(res, null, 'User removed successfully');
   } catch (error) {
     next(error);
+  }
+};
+
+export const logout = (req, res) => {
+  if (req.session) {
+    req.session.destroy((err) => {
+      if (err) {
+        return sendError(res, 'Could not log out', 500);
+      }
+      res.clearCookie('connect.sid');
+      return sendSuccess(res, null, 'Logged out successfully');
+    });
+  } else {
+    return sendSuccess(res, null, 'Logged out successfully');
   }
 };

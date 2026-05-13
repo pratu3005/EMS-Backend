@@ -166,10 +166,10 @@ export const updateRegistrationStatus = async (req, res, next) => {
 
         // Get ticket template for event
         const templateResult = await client.query(
-          'SELECT id FROM ticket_templates WHERE event_id = $1',
+          'SELECT template_id FROM ticket_templates WHERE event_id = $1',
           [reg.event_id]
         );
-        const templateId = templateResult.rows[0]?.id || null;
+        const templateId = templateResult.rows[0]?.template_id || null;
 
         // Prepare ticket data from database
         const ticketData = {

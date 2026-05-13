@@ -109,7 +109,7 @@ export const createNewEvent = async (req, res, next) => {
         return sendError(res, 'Address is required', 400);
       }
 
-      if (!validateEventFor(event_for)) {
+      if (!validateEventFor(event_for || 'all')) {
         return sendError(
           res,
           'Event for must be either "all" or "tssia_members"',
