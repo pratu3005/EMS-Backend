@@ -153,7 +153,7 @@ export const processScan = async (searchCode, scannedBy) => {
       `SELECT er.registration_id, er.event_id, er.registration_status_id, er.attendance_status_id,
               rs.name as registration_status, as_status.name as attendance_status,
               p.name as participant_name, p.email, p.phone,
-              e.event_name, e.start_date_time, er.organization, er.designation,
+              e.event_name, e.start_date_time, e.end_date_time, er.organization, er.designation,
               ps.pass_number
        FROM event_registrations er
        JOIN participants p ON er.participant_id = p.participant_id
@@ -178,13 +178,18 @@ export const processScan = async (searchCode, scannedBy) => {
       throw new Error(`Invalid: Registration status is ${registration.registration_status}`);
     }
 
-    // 3. Check if scan is within 2 hours before event start time
+    // 3. Check if scan is within the allowed window (2 hours before start to event end time)
     const eventStartTime = new Date(registration.start_date_time);
+    const eventEndTime = new Date(registration.end_date_time);
     const currentTime = new Date();
     const twoHoursBeforeEvent = new Date(eventStartTime.getTime() - (2 * 60 * 60 * 1000));
     
     if (currentTime < twoHoursBeforeEvent) {
-      throw new Error(`Scanning not allowed: Event starts in more than 2 hours. Event begins at ${eventStartTime.toLocaleString()}`);
+      throw new Error(`Scanning not allowed: Event starts at ${eventStartTime.toLocaleString()}. You can scan starting 2 hours before.`);
+    }
+
+    if (currentTime > eventEndTime) {
+      throw new Error(`Scanning not allowed: Event ended at ${eventEndTime.toLocaleString()}.`);
     }
 
     // 4. Check for Duplicate
@@ -215,8 +220,8 @@ export const processScan = async (searchCode, scannedBy) => {
     const statusId = attendedStatus.rows[0]?.status_id || 10;
 
     await client.query(
-      'UPDATE event_registrations SET attendance_status_id = $1, updated_at = NOW() WHERE registration_id = $2',
-      [statusId, registration.registration_id]
+      'UPDATE event_registrations SET attendance_status_id = $1, verified_at = NOW(), verified_by = $3, updated_at = NOW() WHERE registration_id = $2',
+      [statusId, registration.registration_id, scannedBy]
     );
 
     await client.query(

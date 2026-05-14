@@ -108,6 +108,12 @@ export const getEventTickets = async (req, res) => {
     );
     const total = parseInt(countResult.rows[0].count);
 
+    const sortBy = req.query.sortBy || 'created_at';
+    const sortOrder = req.query.sortOrder === 'asc' ? 'ASC' : 'DESC';
+    
+    const allowedSortFields = ['created_at', 'participant_name', 'event_name', 'pass_number'];
+    const finalSortBy = allowedSortFields.includes(sortBy) ? sortBy : 'created_at';
+
     const result = await db(
       `SELECT t.*, p.pass_number, qr.qr_code,
               e.event_name, e.start_date_time, e.address,
@@ -120,7 +126,7 @@ export const getEventTickets = async (req, res) => {
        JOIN participants pt ON t.participant_id = pt.participant_id
        JOIN event_registrations reg ON t.registration_id = reg.registration_id
        WHERE t.event_id = $1 AND t.is_deleted = FALSE
-       ORDER BY t.created_at DESC
+       ORDER BY ${finalSortBy === 'participant_name' ? 'pt.name' : (finalSortBy === 'event_name' ? 'e.event_name' : (finalSortBy === 'pass_number' ? 'p.pass_number' : 't.created_at'))} ${sortOrder}
        LIMIT $2 OFFSET $3`,
       [eventId, pageSize, offset]
     );
@@ -178,6 +184,12 @@ export const getAllTickets = async (req, res) => {
     );
     const total = parseInt(countResult.rows[0].count);
 
+    const sortBy = req.query.sortBy || 'created_at';
+    const sortOrder = req.query.sortOrder === 'asc' ? 'ASC' : 'DESC';
+    
+    const allowedSortFields = ['created_at', 'participant_name', 'event_name', 'pass_number'];
+    const finalSortBy = allowedSortFields.includes(sortBy) ? sortBy : 'created_at';
+
     const result = await db(
       `SELECT t.*, p.pass_number, qr.qr_code,
               e.event_name, e.start_date_time, e.address,
@@ -190,7 +202,7 @@ export const getAllTickets = async (req, res) => {
        JOIN participants pt ON t.participant_id = pt.participant_id
        JOIN event_registrations reg ON t.registration_id = reg.registration_id
        WHERE t.is_deleted = FALSE
-       ORDER BY t.created_at DESC
+       ORDER BY ${finalSortBy === 'participant_name' ? 'pt.name' : (finalSortBy === 'event_name' ? 'e.event_name' : (finalSortBy === 'pass_number' ? 'p.pass_number' : 't.created_at'))} ${sortOrder}
        LIMIT $1 OFFSET $2`,
       [pageSize, offset]
     );

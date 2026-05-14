@@ -8,6 +8,7 @@ import {
   getEventCount,
   getAdminDraftEvent,
   publishEvent,
+  query,
 } from '../services/db.service.js';
 import { sendSuccess, sendError, sendPaginated } from '../utils/response.js';
 import {
@@ -326,6 +327,35 @@ export const publishDraftEvent = async (req, res, next) => {
 
     const publishedEvent = await publishEvent(eventId, userId);
     return sendSuccess(res, publishedEvent, 'Event published successfully');
+  } catch (error) {
+    next(error);
+  }
+};
+
+// Get assigned events for verifier
+export const getAssignedEvents = async (req, res, next) => {
+  try {
+    const userId = req.user?.user_id;
+    
+    if (!userId) {
+      return sendError(res, 'User ID is required', 400);
+    }
+
+    const result = await query(
+      `SELECT e.event_id, e.event_name, e.description, e.start_date_time, 
+              e.end_date_time, e.address, e.event_status, e.capacity,
+              COUNT(er.registration_id) as total_registrations
+       FROM user_events ue
+       JOIN events e ON ue.event_id = e.event_id
+       LEFT JOIN event_registrations er ON e.event_id = er.event_id AND er.is_deleted = false
+       WHERE ue.user_id = $1 AND ue.is_deleted = false AND e.is_deleted = false
+       GROUP BY e.event_id, e.event_name, e.description, e.start_date_time,
+                e.end_date_time, e.address, e.event_status, e.capacity
+       ORDER BY e.start_date_time DESC`,
+      [userId]
+    );
+
+    return sendSuccess(res, result.rows, 'Assigned events retrieved successfully');
   } catch (error) {
     next(error);
   }

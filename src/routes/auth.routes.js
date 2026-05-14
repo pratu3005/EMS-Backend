@@ -5,6 +5,7 @@ import {
   getProfile,
   listAllUsers,
   updateVerifierEvents,
+  editUser,
   removeUser,
   logout,
 } from '../controllers/auth.controller.js';
@@ -20,6 +21,7 @@ router.post('/login', login);
 router.get('/profile', authenticate, getProfile);
 router.get('/users', authenticate, listAllUsers);
 router.patch('/users/:userId/events', authenticate, updateVerifierEvents);
+router.put('/users/:userId', authenticate, editUser);
 router.delete('/users/:userId', authenticate, removeUser);
 router.post('/logout', logout);
 

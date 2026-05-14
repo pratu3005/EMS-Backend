@@ -10,6 +10,7 @@ import {
   getUserById,
   listUsers,
   assignEventsToUser,
+  updateUser,
   deleteUser,
 } from '../services/db.service.js';
 import { sendSuccess, sendError } from '../utils/response.js';
@@ -154,6 +155,23 @@ export const listAllUsers = async (req, res, next) => {
   try {
     const users = await listUsers();
     return sendSuccess(res, users);
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const editUser = async (req, res, next) => {
+  try {
+    const { userId } = req.params;
+    const { name, email, username, password } = req.body;
+
+    let updateData = { name, email, username };
+    if (password) {
+      updateData.password = await hashPassword(password);
+    }
+
+    const updatedUser = await updateUser(userId, updateData);
+    return sendSuccess(res, updatedUser, 'User updated successfully');
   } catch (error) {
     next(error);
   }
