@@ -357,6 +357,7 @@ export const getAssignedEvents = async (req, res, next) => {
        JOIN events e ON ue.event_id = e.event_id
        LEFT JOIN event_registrations er ON e.event_id = er.event_id AND er.is_deleted = false
        WHERE ue.user_id = $1 AND ue.is_deleted = false AND e.is_deleted = false
+         AND (e.end_date_time IS NULL OR e.end_date_time >= NOW())
        GROUP BY e.event_id, e.event_name, e.description, e.start_date_time,
                 e.end_date_time, e.address, e.event_status, e.capacity
        ORDER BY e.start_date_time DESC`,

@@ -211,11 +211,8 @@ export const processScan = async (searchCode, scannedBy, eventId) => {
       throw new Error(`Scanning not allowed: Event starts at ${eventStartTime.toLocaleString()}. You can scan starting 2 hours before.`);
     }
 
-    const endOfDay = new Date(eventEndTime);
-    endOfDay.setHours(23, 59, 59, 999);
-    
-    if (currentTime > endOfDay) {
-      throw new Error(`Scanning not allowed: Event ended on ${eventEndTime.toLocaleDateString()}.`);
+    if (currentTime > eventEndTime) {
+      throw new Error(`Scanning not allowed: Event ended at ${eventEndTime.toLocaleString()}.`);
     }
 
     // 4. Check for Duplicate

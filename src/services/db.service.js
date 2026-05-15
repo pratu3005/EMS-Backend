@@ -59,6 +59,7 @@ export const getUserById = async (userId) => {
               'event_name', e.event_name,
               'description', e.description,
               'start_date_time', e.start_date_time,
+              'end_date_time', e.end_date_time,
               'address', e.address
             )) FILTER (WHERE e.event_id IS NOT NULL), '[]') as assigned_events
      FROM users u
@@ -96,6 +97,7 @@ export const listUsers = async () => {
               'event_name', e.event_name,
               'description', e.description,
               'start_date_time', e.start_date_time,
+              'end_date_time', e.end_date_time,
               'address', e.address
             )) FILTER (WHERE e.event_id IS NOT NULL), '[]') as assigned_events
      FROM users u
