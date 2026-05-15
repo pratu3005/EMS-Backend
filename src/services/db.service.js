@@ -197,6 +197,8 @@ export const createEvent = async (eventData) => {
     registrationFields,
     successPageConfig,
     isDraft = true,
+    showEventName = true,
+    showStartDateTime = true,
     createdBy,
   } = eventData;
 
@@ -211,9 +213,9 @@ export const createEvent = async (eventData) => {
       additional_info, organizer_name, organizer_email, organizer_phone, organizer_role,
       registration_fields, success_page_config,
       is_draft, event_status, draft_saved_at, published_at, created_by,
-      is_deleted
+      is_deleted, show_event_name, show_start_date_time
     ) 
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, false) 
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, false, $23, $24) 
      RETURNING *`,
     [
       eventName, description, startDateTime, endDateTime, address, 
@@ -221,7 +223,8 @@ export const createEvent = async (eventData) => {
       additionalInfo, organizerName, organizerEmail, organizerPhone, organizerRole,
       JSON.stringify(registrationFields || []),
       JSON.stringify(successPageConfig || {}),
-      isDraft, eventStatus, draftSavedAt, publishedAt, createdBy
+      isDraft, eventStatus, draftSavedAt, publishedAt, createdBy,
+      showEventName, showStartDateTime
     ]
   );
   return result.rows[0];
@@ -247,6 +250,8 @@ export const updateEvent = async (eventId, eventData) => {
     registrationFields,
     successPageConfig,
     isDraft,
+    showEventName,
+    showStartDateTime,
     updatedBy,
   } = eventData;
 
@@ -322,6 +327,14 @@ export const updateEvent = async (eventId, eventData) => {
   if (successPageConfig !== undefined) {
     updateFields.push(`success_page_config = $${paramIndex++}`);
     params.push(JSON.stringify(successPageConfig || {}));
+  }
+  if (showEventName !== undefined) {
+    updateFields.push(`show_event_name = $${paramIndex++}`);
+    params.push(showEventName);
+  }
+  if (showStartDateTime !== undefined) {
+    updateFields.push(`show_start_date_time = $${paramIndex++}`);
+    params.push(showStartDateTime);
   }
 
   // Handle draft status changes

@@ -101,11 +101,17 @@ export const getEventTickets = async (req, res) => {
     const page = Math.max(1, parseInt(req.query.page) || 1);
     const pageSize = Math.max(1, Math.min(100, parseInt(req.query.pageSize) || 10));
     const offset = (page - 1) * pageSize;
+    const search = req.query.search || "";
 
-    const countResult = await db(
-      'SELECT COUNT(*) FROM tickets WHERE event_id = $1 AND is_deleted = FALSE',
-      [eventId]
-    );
+    const countQuery = `
+      SELECT COUNT(*) 
+      FROM tickets t
+      JOIN participants pt ON t.participant_id = pt.participant_id
+      JOIN events e ON t.event_id = e.event_id
+      WHERE t.event_id = $1 AND t.is_deleted = FALSE
+      AND (pt.name ILIKE $2 OR e.event_name ILIKE $2)
+    `;
+    const countResult = await db(countQuery, [eventId, `%${search}%`]);
     const total = parseInt(countResult.rows[0].count);
 
     const sortBy = req.query.sortBy || 'created_at';
@@ -114,22 +120,24 @@ export const getEventTickets = async (req, res) => {
     const allowedSortFields = ['created_at', 'participant_name', 'event_name', 'pass_number'];
     const finalSortBy = allowedSortFields.includes(sortBy) ? sortBy : 'created_at';
 
-    const result = await db(
-      `SELECT t.*, p.pass_number, qr.qr_code,
-              e.event_name, e.start_date_time, e.address,
-              pt.name as participant_name, pt.email as participant_email, pt.phone as participant_phone,
-              reg.organization, reg.designation
-       FROM tickets t
-       JOIN passes p ON t.pass_id = p.pass_id
-       JOIN qr_codes qr ON t.qr_id = qr.qr_id
-       JOIN events e ON t.event_id = e.event_id
-       JOIN participants pt ON t.participant_id = pt.participant_id
-       JOIN event_registrations reg ON t.registration_id = reg.registration_id
-       WHERE t.event_id = $1 AND t.is_deleted = FALSE
-       ORDER BY ${finalSortBy === 'participant_name' ? 'pt.name' : (finalSortBy === 'event_name' ? 'e.event_name' : (finalSortBy === 'pass_number' ? 'p.pass_number' : 't.created_at'))} ${sortOrder}
-       LIMIT $2 OFFSET $3`,
-      [eventId, pageSize, offset]
-    );
+    const query = `
+      SELECT t.*, p.pass_number, qr.qr_code,
+             e.event_name, e.start_date_time, e.address,
+             pt.name as participant_name, pt.email as participant_email, pt.phone as participant_phone,
+             reg.organization, reg.designation
+      FROM tickets t
+      JOIN passes p ON t.pass_id = p.pass_id
+      JOIN qr_codes qr ON t.qr_id = qr.qr_id
+      JOIN events e ON t.event_id = e.event_id
+      JOIN participants pt ON t.participant_id = pt.participant_id
+      JOIN event_registrations reg ON t.registration_id = reg.registration_id
+      WHERE t.event_id = $1 AND t.is_deleted = FALSE
+      AND (pt.name ILIKE $4 OR e.event_name ILIKE $4)
+      ORDER BY ${finalSortBy === 'participant_name' ? 'pt.name' : (finalSortBy === 'event_name' ? 'e.event_name' : (finalSortBy === 'pass_number' ? 'p.pass_number' : 't.created_at'))} ${sortOrder}
+      LIMIT $2 OFFSET $3
+    `;
+
+    const result = await db(query, [eventId, pageSize, offset, `%${search}%`]);
 
     res.json({
       success: true,
@@ -178,10 +186,17 @@ export const getAllTickets = async (req, res) => {
     const page = Math.max(1, parseInt(req.query.page) || 1);
     const pageSize = Math.max(1, Math.min(100, parseInt(req.query.pageSize) || 10));
     const offset = (page - 1) * pageSize;
+    const search = req.query.search || "";
 
-    const countResult = await db(
-      'SELECT COUNT(*) FROM tickets WHERE is_deleted = FALSE'
-    );
+    const countQuery = `
+      SELECT COUNT(*) 
+      FROM tickets t
+      JOIN participants pt ON t.participant_id = pt.participant_id
+      JOIN events e ON t.event_id = e.event_id
+      WHERE t.is_deleted = FALSE
+      AND (pt.name ILIKE $1 OR e.event_name ILIKE $1)
+    `;
+    const countResult = await db(countQuery, [`%${search}%`]);
     const total = parseInt(countResult.rows[0].count);
 
     const sortBy = req.query.sortBy || 'created_at';
@@ -190,22 +205,24 @@ export const getAllTickets = async (req, res) => {
     const allowedSortFields = ['created_at', 'participant_name', 'event_name', 'pass_number'];
     const finalSortBy = allowedSortFields.includes(sortBy) ? sortBy : 'created_at';
 
-    const result = await db(
-      `SELECT t.*, p.pass_number, qr.qr_code,
+    const query = `
+      SELECT t.*, p.pass_number, qr.qr_code,
               e.event_name, e.start_date_time, e.address,
               pt.name as participant_name, pt.email as participant_email, pt.phone as participant_phone,
               reg.organization, reg.designation
-       FROM tickets t
-       JOIN passes p ON t.pass_id = p.pass_id
-       JOIN qr_codes qr ON t.qr_id = qr.qr_id
-       JOIN events e ON t.event_id = e.event_id
-       JOIN participants pt ON t.participant_id = pt.participant_id
-       JOIN event_registrations reg ON t.registration_id = reg.registration_id
-       WHERE t.is_deleted = FALSE
-       ORDER BY ${finalSortBy === 'participant_name' ? 'pt.name' : (finalSortBy === 'event_name' ? 'e.event_name' : (finalSortBy === 'pass_number' ? 'p.pass_number' : 't.created_at'))} ${sortOrder}
-       LIMIT $1 OFFSET $2`,
-      [pageSize, offset]
-    );
+      FROM tickets t
+      JOIN passes p ON t.pass_id = p.pass_id
+      JOIN qr_codes qr ON t.qr_id = qr.qr_id
+      JOIN events e ON t.event_id = e.event_id
+      JOIN participants pt ON t.participant_id = pt.participant_id
+      JOIN event_registrations reg ON t.registration_id = reg.registration_id
+      WHERE t.is_deleted = FALSE
+      AND (pt.name ILIKE $3 OR e.event_name ILIKE $3)
+      ORDER BY ${finalSortBy === 'participant_name' ? 'pt.name' : (finalSortBy === 'event_name' ? 'e.event_name' : (finalSortBy === 'pass_number' ? 'p.pass_number' : 't.created_at'))} ${sortOrder}
+      LIMIT $1 OFFSET $2
+    `;
+
+    const result = await db(query, [pageSize, offset, `%${search}%`]);
 
     res.json({
       success: true,

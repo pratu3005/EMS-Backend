@@ -71,6 +71,8 @@ export const createNewEvent = async (req, res, next) => {
       registration_fields,
       success_page_config,
       is_draft = true,
+      show_event_name = true,
+      show_start_date_time = true,
     } = req.body;
 
     // Check for existing draft event
@@ -138,6 +140,8 @@ export const createNewEvent = async (req, res, next) => {
       registrationFields: registration_fields || [],
       successPageConfig: success_page_config || {},
       isDraft: is_draft,
+      showEventName: show_event_name,
+      showStartDateTime: show_start_date_time,
       createdBy: userId || null,
     };
 
@@ -174,6 +178,8 @@ export const editEvent = async (req, res, next) => {
       registration_fields,
       success_page_config,
       is_draft,
+      show_event_name,
+      show_start_date_time,
     } = req.body;
 
     if (!eventId) {
@@ -234,6 +240,8 @@ export const editEvent = async (req, res, next) => {
       registrationFields: registration_fields || event.registration_fields,
       successPageConfig: success_page_config || event.success_page_config,
       isDraft: is_draft !== undefined ? is_draft : event.is_draft,
+      showEventName: show_event_name !== undefined ? show_event_name : event.show_event_name,
+      showStartDateTime: show_start_date_time !== undefined ? show_start_date_time : event.show_start_date_time,
       updatedBy: userId || null,
     };
 

@@ -1,5 +1,5 @@
 import pool from '../config/db.js';
-import { generatePassNumber } from '../utils/pass.js';
+import { generatePassNumber, generateRandomQRText } from '../utils/pass.js';
 import { encodeQRData } from '../utils/qr.js';
 
 export const processRegistration = async (registrationData) => {
@@ -83,9 +83,24 @@ export const processRegistration = async (registrationData) => {
     );
 
     const registrationId = registration.rows[0].registration_id;
+    
+    // 4. Generate Pass & QR Text
+    // Get event name for prefix and count for serial
+    const eventInfo = await client.query(
+      'SELECT event_name FROM events WHERE event_id = $1',
+      [event_id]
+    );
+    const eventName = eventInfo.rows[0]?.event_name || 'EVT';
+    
+    const countRes = await client.query(
+      'SELECT COUNT(*) FROM event_registrations WHERE event_id = $1',
+      [event_id]
+    );
+    const serial = parseInt(countRes.rows[0].count); // Current count is the serial (since we just inserted)
+    
+    const passNumber = generatePassNumber(eventName, serial);
+    const qrString = generateRandomQRText();
 
-    // 4. Generate Pass
-    const passNumber = generatePassNumber();
     const pass = await client.query(
       'INSERT INTO passes (registration_id, pass_number, created_by) VALUES ($1, $2, $3) RETURNING pass_id',
       [registrationId, passNumber, created_by]
@@ -93,13 +108,7 @@ export const processRegistration = async (registrationData) => {
 
     const passId = pass.rows[0].pass_id;
 
-    // 5. Generate QR Code
-    const qrData = {
-      registration_id: registrationId,
-      pass_number: passNumber
-    };
-    const qrString = encodeQRData(qrData);
-
+    // 5. Save QR Code
     await client.query(
       'INSERT INTO qr_codes (pass_id, qr_code) VALUES ($1, $2)',
       [passId, qrString]
@@ -143,17 +152,29 @@ export const getPassDetails = async (registrationId) => {
   return result.rows[0];
 };
 
-export const processScan = async (searchCode, scannedBy) => {
+export const processScan = async (searchCode, scannedBy, eventId) => {
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
 
-    // 1. Find registration by QR code OR Pass Number (passcode)
+    // 1. Pre-process searchCode (handle potential JSON string if legacy)
+    let actualCode = searchCode;
+    try {
+      if (searchCode && searchCode.startsWith('{')) {
+        const parsed = JSON.parse(searchCode);
+        actualCode = parsed.qr_code || parsed.pass_number || searchCode;
+      }
+    } catch (e) {
+      // Not JSON, continue with original string
+    }
+
+    // 2. Find registration by QR code OR Pass Number AND Event ID
     const result = await client.query(
       `SELECT er.registration_id, er.event_id, er.registration_status_id, er.attendance_status_id,
               rs.name as registration_status, as_status.name as attendance_status,
               p.name as participant_name, p.email, p.phone,
               e.event_name, e.start_date_time, e.end_date_time, er.organization, er.designation,
+              er.tssia_membership_id,
               ps.pass_number
        FROM event_registrations er
        JOIN participants p ON er.participant_id = p.participant_id
@@ -162,12 +183,14 @@ export const processScan = async (searchCode, scannedBy) => {
        JOIN status_master as_status ON er.attendance_status_id = as_status.status_id
        LEFT JOIN passes ps ON er.registration_id = ps.registration_id
        LEFT JOIN qr_codes qr ON ps.pass_id = qr.pass_id
-       WHERE (qr.qr_code = $1 OR ps.pass_number = $1) AND er.is_deleted = false`,
-      [searchCode]
+       WHERE (qr.qr_code = $1 OR ps.pass_number = $1) 
+         AND er.event_id = $2
+         AND er.is_deleted = false`,
+      [actualCode, eventId]
     );
 
     if (result.rows.length === 0) {
-      throw new Error('Invalid: Code not found in database');
+      throw new Error(`Invalid: Code [${actualCode}] not found`);
     }
 
     const registration = result.rows[0];
@@ -188,8 +211,11 @@ export const processScan = async (searchCode, scannedBy) => {
       throw new Error(`Scanning not allowed: Event starts at ${eventStartTime.toLocaleString()}. You can scan starting 2 hours before.`);
     }
 
-    if (currentTime > eventEndTime) {
-      throw new Error(`Scanning not allowed: Event ended at ${eventEndTime.toLocaleString()}.`);
+    const endOfDay = new Date(eventEndTime);
+    endOfDay.setHours(23, 59, 59, 999);
+    
+    if (currentTime > endOfDay) {
+      throw new Error(`Scanning not allowed: Event ended on ${eventEndTime.toLocaleDateString()}.`);
     }
 
     // 4. Check for Duplicate

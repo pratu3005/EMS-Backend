@@ -1,6 +1,6 @@
 import { processRegistration } from '../services/registration.service.js';
 import pool from '../config/db.js';
-import { generatePassNumber } from '../utils/pass.js';
+import { generatePassNumber, generateRandomQRText } from '../utils/pass.js';
 import { encodeQRData } from '../utils/qr.js';
 import { 
   getEventRegistrations as dbGetEventRegistrations,
@@ -109,8 +109,16 @@ export const updateRegistrationStatus = async (req, res, next) => {
       let qrCodeId;
 
       if (existingPass.rows.length === 0) {
+        // Get event name for prefix
+        const eventRes = await client.query('SELECT event_name FROM events WHERE event_id = $1', [reg.event_id]);
+        const eventName = eventRes.rows[0]?.event_name || 'EVT';
+        
+        // Get count for serial
+        const countRes = await client.query('SELECT COUNT(*) FROM passes p JOIN event_registrations er ON p.registration_id = er.registration_id WHERE er.event_id = $1', [reg.event_id]);
+        const serial = parseInt(countRes.rows[0].count) + 1;
+
         // Generate new pass
-        const passNumber = generatePassNumber();
+        const passNumber = generatePassNumber(eventName, serial);
         const passResult = await client.query(
           'INSERT INTO passes (registration_id, pass_number, created_by) VALUES ($1, $2, $3) RETURNING pass_id',
           [registrationId, passNumber, req.user?.user_id || null]
@@ -118,12 +126,8 @@ export const updateRegistrationStatus = async (req, res, next) => {
 
         passId = passResult.rows[0].pass_id;
 
-        // Generate QR code
-        const qrData = {
-          registration_id: registrationId,
-          pass_number: passNumber
-        };
-        const qrString = encodeQRData(qrData);
+        // Generate QR code (random 10 digit)
+        const qrString = generateRandomQRText();
 
         const qrResult = await client.query(
           'INSERT INTO qr_codes (pass_id, qr_code) VALUES ($1, $2) RETURNING qr_id',

@@ -15,18 +15,18 @@ const router = express.Router();
 
 // Public routes
 router.get('/', listEvents);
-router.get('/:eventId', getEvent);
 
-// Verifier routes
+// Verifier routes (must be before /:eventId)
 router.get('/verifier/assigned', authenticate, getAssignedEvents);
 
-// Admin routes
+// Draft management routes (must be before /:eventId)
+router.get('/user/draft', authenticate, adminOnly, getDraftEvent);
+
+// Parameterized routes (must be last)
+router.get('/:eventId', getEvent);
 router.post('/', authenticate, adminOnly, createNewEvent);
 router.put('/:eventId', authenticate, adminOnly, editEvent);
 router.delete('/:eventId', authenticate, adminOnly, deleteEvent);
-
-// Draft management routes
-router.get('/user/draft', authenticate, adminOnly, getDraftEvent);
 router.put('/:eventId/publish', authenticate, adminOnly, publishDraftEvent);
 
 export default router;
